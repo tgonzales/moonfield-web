@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { CreditsBlock } from "./credits-block";
 import { track } from "@/lib/analytics/track";
 
+const PREVIEW_LIMIT_SECONDS = 60;
+
 export interface PlayerTrack {
   title: string;
   durationSeconds?: number;
@@ -92,11 +94,26 @@ export function TrackPlayer({
     }
   }
 
+  /**
+   * Preview cap: pause (or advance, if playing the whole release in
+   * sequence) once a track hits PREVIEW_LIMIT_SECONDS — client-side only,
+   * so it shapes the UI but doesn't stop someone from fetching the file's
+   * public R2 URL directly.
+   */
+  function handleTimeUpdate() {
+    const audio = audioRef.current;
+    if (audio && audio.currentTime >= PREVIEW_LIMIT_SECONDS) {
+      audio.pause();
+      handleEnded();
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <audio
         ref={audioRef}
         onEnded={handleEnded}
+        onTimeUpdate={handleTimeUpdate}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="hidden"
