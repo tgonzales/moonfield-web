@@ -201,20 +201,20 @@ async function main() {
   const status = (args.status ?? "draft").toUpperCase();
   const sku = args.sku;
   const compareAtPrice = args["compare-at"];
-  const description = args.description;
-  const credits = args.credits;
+  const description = args["description-file"]
+    ? readFileSync(args["description-file"], "utf-8")
+    : args.description;
+  const credits = args["credits-file"] ? readFileSync(args["credits-file"], "utf-8") : args.credits;
 
   if (!releaseHandle || !format || !price) {
     console.error(
-      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip] [--publish skip] [--description \"...\"] [--credits \"...\"]",
+      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip] [--publish skip] [--description \"...\"|--description-file <path>] [--credits \"...\"|--credits-file <path>]",
     );
     process.exit(1);
   }
 
-  if (description && description.length > 500) {
-    console.error(`--description is ${description.length} characters — keep it to 500 or fewer.`);
-    process.exit(1);
-  }
+  // Shopify's native description field (descriptionHtml) has no hard length limit — only
+  // custom.credits does (500 chars, enforced by the metafield definition itself).
   if (credits && credits.length > 500) {
     console.error(`--credits is ${credits.length} characters — keep it to 500 or fewer (enforced by the metafield too).`);
     process.exit(1);
