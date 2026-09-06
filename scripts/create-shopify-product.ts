@@ -13,8 +13,20 @@
  *   pnpm shopify:product --release human-machine --format cd --price 18.00
  *   pnpm shopify:product --release human-machine --format digital --price 9.99 --status active
  *
- * Requires SHOPIFY_ADMIN_API_TOKEN with write_products (+ read_products)
- * access scope. Requires SHOPIFY_STORE_DOMAIN to be reachable and correct.
+ * Requires SHOPIFY_ADMIN_API_TOKEN with write_products, read_products,
+ * write_files, read_files, write_publications and read_publications
+ * (see docs/shopify-admin-scopes.md). Also publishes the product to the
+ * "Moonfield Headless" sales channel by default — pass --publish skip to
+ * leave it unlisted.
+ *
+ * IMPORTANT: run `pnpm shopify:setup-metafields` at least once (on a fresh
+ * store, or after adding a new custom.* key) BEFORE the first product is
+ * created. A metafield value written before its definition exists is only
+ * visible via the Admin API — the Storefront API (what the storefront
+ * actually reads) returns null for it until this script runs again for
+ * that product *after* the definition exists. Confirmed by hand: creating
+ * the definition alone did not retroactively fix an already-set value; a
+ * second productSet call did.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -144,6 +156,34 @@ const VARIANTS_BULK_UPDATE_MUTATION = `
   }
 `;
 
+const PUBLICATIONS_QUERY = `
+  query Publications { publications(first: 20) { edges { node { id name } } } }
+`;
+
+const PUBLISHABLE_PUBLISH_MUTATION = `
+  mutation PublishablePublish($id: ID!, $input: [PublicationInput!]!) {
+    publishablePublish(id: $id, input: $input) {
+      userErrors { field message }
+    }
+  }
+`;
+
+/** Finds the headless sales channel by name so a re-run doesn't need a hardcoded publication id. */
+async function findHeadlessPublicationId(): Promise<string> {
+  const data = await adminGraphQL<{ publications: { edges: { node: { id: string; name: string } }[] } }>(
+    PUBLICATIONS_QUERY,
+  );
+  const match = data.publications.edges.find((e) => /headless/i.test(e.node.name));
+  if (!match) {
+    throw new Error(
+      `No sales channel with "headless" in its name was found. Available: ${data.publications.edges
+        .map((e) => e.node.name)
+        .join(", ")}`,
+    );
+  }
+  return match.node.id;
+}
+
 function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -164,7 +204,7 @@ async function main() {
 
   if (!releaseHandle || !format || !price) {
     console.error(
-      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip]",
+      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip] [--publish skip]",
     );
     process.exit(1);
   }
@@ -242,10 +282,17 @@ async function main() {
   if (!coverUploaded) {
     console.log("Note: no cover image was uploaded — add one manually in Shopify admin for now.");
   }
-  console.log(
-    "Note: status ACTIVE alone does not make a product purchasable — it also needs to be published " +
-      "to a sales channel (e.g. Headless) in Shopify admin. Not automated here (needs read/write_publications scope).",
-  );
+
+  if (args.publish !== "skip") {
+    const headlessId = await findHeadlessPublicationId();
+    const publishResult = await adminGraphQL<{
+      publishablePublish: { userErrors: ShopifyUserError[] };
+    }>(PUBLISHABLE_PUBLISH_MUTATION, { id: product.id, input: [{ publicationId: headlessId }] });
+    assertNoUserErrors(publishResult.publishablePublish.userErrors);
+    console.log("Published to the Moonfield Headless sales channel.");
+  } else {
+    console.log("Skipped publishing to a sales channel (--publish skip) — product stays unlisted.");
+  }
 }
 
 main().catch((error) => {

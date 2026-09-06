@@ -16,6 +16,15 @@ Confirmed via `currentAppInstallation { accessScopes }` on 2026-09-06.
 |---|---|
 | `write_products`, `read_products` | `scripts/create-shopify-product.ts` |
 | `write_files`, `read_files` | `scripts/create-shopify-product.ts` (cover image upload via `stagedUploadsCreate`) |
+| `write_publications`, `read_publications` | `scripts/create-shopify-product.ts` (publish to the "Moonfield Headless" channel via `publishablePublish`) |
+
+**Gotcha found the hard way:** writing a `custom.*` metafield via `productSet`
+does **not** make it visible on the Storefront API by itself — it needs a
+*metafield definition* with `access.storefront: PUBLIC_READ`
+(`pnpm shopify:setup-metafields`, see `scripts/setup-shopify-metafields.ts`).
+Creating the definition doesn't retroactively fix values set before it
+existed — re-run `pnpm shopify:product` for that product afterward. Run
+`shopify:setup-metafields` once before ever creating a product.
 
 ## Needed for features already built or discussed
 
@@ -23,7 +32,6 @@ Not enabled yet — add when we build the corresponding piece.
 
 | Feature | Scopes | Where it plugs in |
 |---|---|---|
-| Publish a product to a sales channel (make `ACTIVE` actually purchasable/visible on Storefront API) | `read_publications`, `write_publications` | `scripts/create-shopify-product.ts` — `publishablePublish` mutation |
 | Digital HD download delivery (WAV/FLAC from R2 after a paid order) | `read_orders` | `src/app/api/webhooks/shopify/route.ts` + `src/lib/fulfillment/adapters/digital-delivery.adapter.ts` — only need to *read* the order, delivery itself is R2, not Shopify |
 | Real fulfillment status sync (elasticStage / merchant-managed orders) | `read_orders`, `write_orders`, `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders`, `read_fulfillments`, `write_fulfillments` | `src/lib/fulfillment/adapters/elastic-stage.adapter.ts`, `src/lib/fulfillment/adapters/local.adapter.ts` |
 | Subscriptions / memberships (PRD §16, not MVP) | `read_purchase_options`, `write_purchase_options` (selling plans) | not built yet |
