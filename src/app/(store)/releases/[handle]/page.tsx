@@ -4,9 +4,10 @@ import Link from "next/link";
 import { getReleaseByHandle } from "@/content/releases";
 import { getArtistByHandle } from "@/content/artists";
 import { getProductByHandle } from "@/lib/shopify/catalog";
-import { ProductCard } from "@/components/store/product-card";
 import { TrackPlayer } from "@/components/store/track-player";
 import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
+import { FormatSwitcher, type FormatOption } from "@/components/store/format-switcher";
+import { formatKeyFor, formatLabelFor } from "@/components/store/format-utils";
 
 export default async function ReleasePage({
   params,
@@ -22,20 +23,33 @@ export default async function ReleasePage({
     await Promise.all(release.productHandles.map((h) => getProductByHandle(h)))
   ).filter((p) => p !== null);
 
+  const formatOptions: FormatOption[] = products.map((product) => {
+    const key = formatKeyFor(product.raw.productType);
+    return { key, label: formatLabelFor(key), product };
+  });
+
   return (
     <div className="flex flex-col gap-10">
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[300px_1fr]">
         <div className="relative aspect-square overflow-hidden rounded-md bg-secondary">
           <Image src={release.coverImage} alt={release.title} fill sizes="300px" className="object-cover" priority />
         </div>
-        <div>
-          {artist && (
-            <Link href={`/artists/${artist.handle}`} className="text-sm text-muted-foreground hover:text-foreground">
-              {artist.name}
-            </Link>
+        <div className="flex flex-col gap-6">
+          <div>
+            {artist && (
+              <Link href={`/artists/${artist.handle}`} className="text-sm text-muted-foreground hover:text-foreground">
+                {artist.name}
+              </Link>
+            )}
+            <h1 className="mt-1 font-serif text-4xl">{release.title}</h1>
+            {release.releaseDate && <p className="mt-2 text-sm text-muted-foreground">{release.releaseDate}</p>}
+          </div>
+
+          {formatOptions.length > 0 ? (
+            <FormatSwitcher options={formatOptions} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Products for this release are coming soon.</p>
           )}
-          <h1 className="mt-1 font-serif text-4xl">{release.title}</h1>
-          {release.releaseDate && <p className="mt-2 text-sm text-muted-foreground">{release.releaseDate}</p>}
         </div>
       </div>
 
@@ -49,19 +63,6 @@ export default async function ReleasePage({
           }))}
         />
       )}
-
-      <div>
-        <h2 className="mb-4 font-serif text-2xl">Shop this release</h2>
-        {products.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Products for this release are coming soon.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-3">
-            {products.map((product) => (
-              <ProductCard key={product.handle} product={product} />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

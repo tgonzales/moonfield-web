@@ -18,6 +18,7 @@ export const PRODUCT_METAFIELD_IDENTIFIERS = `
     { namespace: "custom", key: "preorder_start" }
     { namespace: "custom", key: "preorder_end" }
     { namespace: "custom", key: "bundle_item_handles" }
+    { namespace: "custom", key: "credits" }
   ]) {
     key
     value

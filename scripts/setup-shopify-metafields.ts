@@ -18,7 +18,7 @@ interface ShopifyUserError {
   code?: string;
 }
 
-const DEFINITIONS: { key: string; name: string; description: string }[] = [
+const DEFINITIONS: { key: string; name: string; description: string; type?: string; maxLength?: number }[] = [
   { key: "product_type", name: "Moonfield Product Type", description: "DIGITAL | PHYSICAL | ARTIFACT | COLLECTOR | BUNDLE" },
   { key: "fulfillment_provider", name: "Fulfillment Provider", description: "LOCAL | ELASTICSTAGE | PRINT_PROVIDER | NIX_INTERNAL | DIGITAL" },
   { key: "production_mode", name: "Production Mode", description: "STOCK | ON_DEMAND" },
@@ -31,6 +31,13 @@ const DEFINITIONS: { key: string; name: string; description: string }[] = [
   { key: "preorder_start", name: "Preorder Start", description: "PRD §14" },
   { key: "preorder_end", name: "Preorder End", description: "PRD §14" },
   { key: "bundle_item_handles", name: "Bundle Item Handles", description: "Comma-separated product handles" },
+  {
+    key: "credits",
+    name: "Credits",
+    description: "Liner-notes style credits (writing, production, mixing...) — distinct from the product description",
+    type: "multi_line_text_field",
+    maxLength: 500,
+  },
 ];
 
 const CREATE_MUTATION = `
@@ -56,8 +63,9 @@ async function main() {
         name: def.name,
         description: def.description,
         ownerType: "PRODUCT",
-        type: "single_line_text_field",
+        type: def.type ?? "single_line_text_field",
         access: { storefront: "PUBLIC_READ" },
+        validations: def.maxLength ? [{ name: "max", value: String(def.maxLength) }] : undefined,
       },
     });
 

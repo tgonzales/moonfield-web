@@ -201,11 +201,22 @@ async function main() {
   const status = (args.status ?? "draft").toUpperCase();
   const sku = args.sku;
   const compareAtPrice = args["compare-at"];
+  const description = args.description;
+  const credits = args.credits;
 
   if (!releaseHandle || !format || !price) {
     console.error(
-      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip] [--publish skip]",
+      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip] [--publish skip] [--description \"...\"] [--credits \"...\"]",
     );
+    process.exit(1);
+  }
+
+  if (description && description.length > 500) {
+    console.error(`--description is ${description.length} characters — keep it to 500 or fewer.`);
+    process.exit(1);
+  }
+  if (credits && credits.length > 500) {
+    console.error(`--credits is ${credits.length} characters — keep it to 500 or fewer (enforced by the metafield too).`);
     process.exit(1);
   }
 
@@ -231,12 +242,14 @@ async function main() {
     productType: preset.shopifyProductType,
     status,
     tags: [release.artistHandle, release.handle, format],
+    ...(description ? { descriptionHtml: description } : {}),
     metafields: [
       { namespace: "custom", key: "product_type", type: "single_line_text_field", value: preset.moonfieldProductType },
       { namespace: "custom", key: "fulfillment_provider", type: "single_line_text_field", value: preset.fulfillmentProviderId },
       { namespace: "custom", key: "production_mode", type: "single_line_text_field", value: preset.productionMode },
       { namespace: "custom", key: "artist_handle", type: "single_line_text_field", value: release.artistHandle },
       { namespace: "custom", key: "release_handle", type: "single_line_text_field", value: release.handle },
+      ...(credits ? [{ namespace: "custom", key: "credits", type: "multi_line_text_field", value: credits }] : []),
     ],
   };
 

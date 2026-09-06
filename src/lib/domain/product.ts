@@ -70,5 +70,7 @@ export interface MoonfieldProduct<TRaw = unknown> {
   preorder?: PreorderWindow;
   /** Handles of the products bundled together, when productType === "BUNDLE". */
   bundleItemHandles?: string[];
+  /** custom.credits metafield — liner-notes style credits, distinct from Shopify's native description. */
+  credits?: string;
   raw: TRaw;
 }

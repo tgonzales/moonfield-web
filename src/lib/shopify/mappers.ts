@@ -80,6 +80,7 @@ export function mapShopifyProduct(product: ShopifyProduct): MoonfieldProduct<Sho
         }
       : undefined,
     bundleItemHandles: bundleItemHandles ? bundleItemHandles.split(",").map((h) => h.trim()) : undefined,
+    credits: readMetafield(metafields, "credits"),
     raw: product,
   };
 }
