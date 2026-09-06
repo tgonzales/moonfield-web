@@ -214,9 +214,11 @@ async function main() {
   }
 
   // Shopify's native description field (descriptionHtml) has no hard length limit — only
-  // custom.credits does (500 chars, enforced by the metafield definition itself).
-  if (credits && credits.length > 500) {
-    console.error(`--credits is ${credits.length} characters — keep it to 500 or fewer (enforced by the metafield too).`);
+  // custom.credits does, enforced by the metafield definition itself. Keep this in sync
+  // with the `credits` entry's maxLength in scripts/setup-shopify-metafields.ts.
+  const CREDITS_MAX_LENGTH = 1000;
+  if (credits && credits.length > CREDITS_MAX_LENGTH) {
+    console.error(`--credits is ${credits.length} characters — keep it to ${CREDITS_MAX_LENGTH} or fewer (enforced by the metafield too).`);
     process.exit(1);
   }
 

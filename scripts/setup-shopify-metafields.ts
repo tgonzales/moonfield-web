@@ -8,7 +8,9 @@
  * back null on the Storefront API.
  *
  * Usage: pnpm shopify:setup-metafields
- * Safe to re-run — already-existing definitions are skipped.
+ * Safe to re-run — if a definition already exists, its validations/name/
+ * description are updated in place (e.g. bumping a max-length) rather than
+ * being left as whatever they were when first created.
  */
 import { adminGraphQL } from "../src/lib/shopify/admin-client";
 
@@ -36,7 +38,7 @@ const DEFINITIONS: { key: string; name: string; description: string; type?: stri
     name: "Credits",
     description: "Liner-notes style credits (writing, production, mixing...) — distinct from the product description",
     type: "multi_line_text_field",
-    maxLength: 500,
+    maxLength: 1000,
   },
 ];
 
@@ -49,8 +51,19 @@ const CREATE_MUTATION = `
   }
 `;
 
+const UPDATE_MUTATION = `
+  mutation MetafieldDefinitionUpdate($definition: MetafieldDefinitionUpdateInput!) {
+    metafieldDefinitionUpdate(definition: $definition) {
+      updatedDefinition { id key }
+      userErrors { field message code }
+    }
+  }
+`;
+
 async function main() {
   for (const def of DEFINITIONS) {
+    const validations = def.maxLength ? [{ name: "max", value: String(def.maxLength) }] : undefined;
+
     const result = await adminGraphQL<{
       metafieldDefinitionCreate: {
         createdDefinition: { id: string; key: string } | null;
@@ -65,7 +78,7 @@ async function main() {
         ownerType: "PRODUCT",
         type: def.type ?? "single_line_text_field",
         access: { storefront: "PUBLIC_READ" },
-        validations: def.maxLength ? [{ name: "max", value: String(def.maxLength) }] : undefined,
+        validations,
       },
     });
 
@@ -74,10 +87,37 @@ async function main() {
 
     if (createdDefinition) {
       console.log(`✓ created custom.${def.key}`);
-    } else if (alreadyExists) {
-      console.log(`= custom.${def.key} already exists — skipped`);
-    } else {
+      continue;
+    }
+
+    if (!alreadyExists) {
       console.error(`✗ custom.${def.key}:`, userErrors.map((e) => e.message).join("; "));
+      continue;
+    }
+
+    const updateResult = await adminGraphQL<{
+      metafieldDefinitionUpdate: {
+        updatedDefinition: { id: string; key: string } | null;
+        userErrors: ShopifyUserError[];
+      };
+    }>(UPDATE_MUTATION, {
+      definition: {
+        namespace: "custom",
+        key: def.key,
+        name: def.name,
+        description: def.description,
+        ownerType: "PRODUCT",
+        validations,
+      },
+    });
+
+    if (updateResult.metafieldDefinitionUpdate.updatedDefinition) {
+      console.log(`= custom.${def.key} already existed — updated (e.g. max length ${def.maxLength ?? "n/a"})`);
+    } else {
+      console.error(
+        `✗ custom.${def.key} update failed:`,
+        updateResult.metafieldDefinitionUpdate.userErrors.map((e) => e.message).join("; "),
+      );
     }
   }
 }
