@@ -3,7 +3,7 @@ import { getCart } from "@/lib/cart/actions";
 import { CartSheet } from "@/components/cart/cart-sheet";
 
 const NAV_LINKS = [
-  { href: "/music", label: "Music" },
+  { href: "/releases", label: "Music" },
   { href: "/artists", label: "Artists" },
   { href: "/merch", label: "Merch" },
   { href: "/artifacts", label: "Artifacts" },
