@@ -113,6 +113,25 @@ export const RELEASES: Release[] = [
     ],
     productHandles: ["guadalquivir-digital", "guadalquivir-cd", "guadalquivir-vinyl"],
   },
+  {
+    handle: "jazz-iberico",
+    artistHandle: "tito-gonzales",
+    title: "Jazz Ibérico",
+    coverImage: "/images/CD-jazz-iberico.jpg",
+    releaseDate: "2026",
+    tracks: [
+      { title: "Safira", durationSeconds: 232, streamKey: "releases/jazz-iberico/stream/01-safira.mp3" },
+      { title: "Bajo La Luna (Acoustic)", durationSeconds: 274, streamKey: "releases/jazz-iberico/stream/02-bajo-la-luna-acoustic.mp3" },
+      { title: "Fabricia", durationSeconds: 200, streamKey: "releases/jazz-iberico/stream/03-fabricia.mp3" },
+      { title: "Hecho a Mano (Bulería)", durationSeconds: 309, streamKey: "releases/jazz-iberico/stream/04-hecho-a-mano-buleria.mp3" },
+      { title: "Mi B", durationSeconds: 229, streamKey: "releases/jazz-iberico/stream/05-mi-b.mp3" },
+      { title: "Pa Helva", durationSeconds: 202, streamKey: "releases/jazz-iberico/stream/06-pa-helva.mp3" },
+      { title: "Seville", durationSeconds: 238, streamKey: "releases/jazz-iberico/stream/07-seville.mp3" },
+      { title: "La Aura", durationSeconds: 267, streamKey: "releases/jazz-iberico/stream/08-la-aura.mp3" },
+      { title: "Waltz For Branca", durationSeconds: 194, streamKey: "releases/jazz-iberico/stream/09-waltz-for-branca.mp3" },
+    ],
+    productHandles: ["jazz-iberico-digital", "jazz-iberico-cd", "jazz-iberico-vinyl"],
+  },
 ];
 
 export function getReleaseByHandle(handle: string): Release | undefined {

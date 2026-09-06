@@ -23,7 +23,7 @@ export const ARTISTS: Artist[] = [
     name: "Tito Gonzales",
     bio: "Composer, producer and multi-instrumentalist exploring cinematic, ambient and progressive music.",
     image: "/images/tito.png",
-    releaseHandles: ["mano-al-aire", "playground-groove", "guadalquivir"],
+    releaseHandles: ["mano-al-aire", "playground-groove", "guadalquivir", "jazz-iberico"],
   },
   {
     handle: "anahy",
