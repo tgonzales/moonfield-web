@@ -1,0 +1,182 @@
+/**
+ * Creates (or updates, if run again with the same handle) a Shopify
+ * product from a Moonfield Release, in one of the physical/digital
+ * formats defined in the FORMAT_PRESETS below. This is the intended way
+ * catalog gets populated — no product-creation UI exists in the
+ * storefront by design (PRD: catalog/artifact viewing only).
+ *
+ * The metafields this sets are exactly what src/lib/shopify/mappers.ts
+ * reads to derive Moonfield's product taxonomy (PRD §6-7) — keep the two
+ * in sync if either changes.
+ *
+ * Usage:
+ *   pnpm shopify:product --release human-machine --format cd --price 18.00
+ *   pnpm shopify:product --release human-machine --format digital --price 9.99 --status active
+ *
+ * Requires SHOPIFY_ADMIN_API_TOKEN with write_products (+ read_products)
+ * access scope. Requires SHOPIFY_STORE_DOMAIN to be reachable and correct.
+ */
+import { adminGraphQL } from "../src/lib/shopify/admin-client";
+import { getReleaseByHandle } from "../src/content/releases";
+import { getArtistByHandle } from "../src/content/artists";
+import type { FulfillmentProviderId, ProductType, ProductionMode } from "../src/lib/domain";
+
+type Format = "digital" | "cd" | "vinyl";
+
+interface FormatPreset {
+  shopifyProductType: string;
+  moonfieldProductType: ProductType;
+  fulfillmentProviderId: FulfillmentProviderId;
+  productionMode: ProductionMode;
+  label: string;
+}
+
+const FORMAT_PRESETS: Record<Format, FormatPreset> = {
+  digital: {
+    shopifyProductType: "Digital Album",
+    moonfieldProductType: "DIGITAL",
+    fulfillmentProviderId: "DIGITAL",
+    productionMode: "ON_DEMAND",
+    label: "Digital Album",
+  },
+  cd: {
+    shopifyProductType: "CD",
+    moonfieldProductType: "PHYSICAL",
+    fulfillmentProviderId: "ELASTICSTAGE",
+    productionMode: "ON_DEMAND",
+    label: "CD",
+  },
+  vinyl: {
+    shopifyProductType: "Vinyl",
+    moonfieldProductType: "PHYSICAL",
+    fulfillmentProviderId: "ELASTICSTAGE",
+    productionMode: "ON_DEMAND",
+    label: "Vinyl",
+  },
+};
+
+interface ShopifyUserError {
+  field: string[] | null;
+  message: string;
+}
+
+function assertNoUserErrors(userErrors: ShopifyUserError[]): void {
+  if (userErrors.length > 0) {
+    throw new Error(userErrors.map((e) => e.message).join("; "));
+  }
+}
+
+const PRODUCT_SET_MUTATION = `
+  mutation ProductSet($input: ProductSetInput!, $identifier: ProductSetIdentifiers) {
+    productSet(input: $input, synchronous: true, identifier: $identifier) {
+      product {
+        id
+        handle
+        status
+        variants(first: 1) {
+          edges { node { id } }
+        }
+      }
+      userErrors { field message }
+    }
+  }
+`;
+
+const VARIANTS_BULK_UPDATE_MUTATION = `
+  mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+    productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+      productVariants { id price }
+      userErrors { field message }
+    }
+  }
+`;
+
+function parseArgs(argv: string[]): Record<string, string> {
+  const args: Record<string, string> = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith("--")) {
+      args[argv[i].slice(2)] = argv[i + 1];
+      i++;
+    }
+  }
+  return args;
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const { release: releaseHandle, format, price } = args;
+  const status = (args.status ?? "draft").toUpperCase();
+  const sku = args.sku;
+  const compareAtPrice = args["compare-at"];
+
+  if (!releaseHandle || !format || !price) {
+    console.error(
+      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active]",
+    );
+    process.exit(1);
+  }
+
+  const preset = FORMAT_PRESETS[format as Format];
+  if (!preset) {
+    console.error(`Unknown --format "${format}". Use one of: ${Object.keys(FORMAT_PRESETS).join(", ")}`);
+    process.exit(1);
+  }
+
+  const release = getReleaseByHandle(releaseHandle);
+  if (!release) {
+    console.error(`No release found for handle "${releaseHandle}" in src/content/releases.ts.`);
+    process.exit(1);
+  }
+  const artist = getArtistByHandle(release.artistHandle);
+
+  const productHandle = `${release.handle}-${format}`;
+
+  const input = {
+    title: `${release.title} (${preset.label})`,
+    handle: productHandle,
+    vendor: artist?.name ?? "Moonfield Records",
+    productType: preset.shopifyProductType,
+    status,
+    tags: [release.artistHandle, release.handle, format],
+    metafields: [
+      { namespace: "custom", key: "product_type", type: "single_line_text_field", value: preset.moonfieldProductType },
+      { namespace: "custom", key: "fulfillment_provider", type: "single_line_text_field", value: preset.fulfillmentProviderId },
+      { namespace: "custom", key: "production_mode", type: "single_line_text_field", value: preset.productionMode },
+      { namespace: "custom", key: "artist_handle", type: "single_line_text_field", value: release.artistHandle },
+      { namespace: "custom", key: "release_handle", type: "single_line_text_field", value: release.handle },
+    ],
+  };
+
+  console.log(`Creating/updating "${input.title}" (${productHandle})...`);
+
+  const setResult = await adminGraphQL<{
+    productSet: { product: { id: string; handle: string; status: string; variants: { edges: { node: { id: string } }[] } }; userErrors: ShopifyUserError[] };
+  }>(PRODUCT_SET_MUTATION, { input, identifier: { handle: productHandle } });
+
+  assertNoUserErrors(setResult.productSet.userErrors);
+  const product = setResult.productSet.product;
+  const defaultVariantId = product.variants.edges[0]?.node.id;
+
+  if (!defaultVariantId) {
+    throw new Error("Product created but no default variant was returned — cannot set price.");
+  }
+
+  const variantInput: Record<string, unknown> = { id: defaultVariantId, price };
+  if (compareAtPrice) variantInput.compareAtPrice = compareAtPrice;
+  if (sku) variantInput.inventoryItem = { sku };
+
+  const variantResult = await adminGraphQL<{
+    productVariantsBulkUpdate: { productVariants: unknown[]; userErrors: ShopifyUserError[] };
+  }>(VARIANTS_BULK_UPDATE_MUTATION, { productId: product.id, variants: [variantInput] });
+
+  assertNoUserErrors(variantResult.productVariantsBulkUpdate.userErrors);
+
+  console.log(`Done: ${product.handle} (${product.status}) — price set to ${price}`);
+  console.log(`Product GID: ${product.id}`);
+  console.log("Note: no cover image was uploaded — add one manually in Shopify admin for now.");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
