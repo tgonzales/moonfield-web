@@ -9,6 +9,8 @@
 export interface Track {
   title: string;
   durationSeconds?: number;
+  /** R2 public-bucket key for the "listen before you buy" preview player — see src/lib/cloudflare/r2.ts. */
+  streamKey?: string;
 }
 
 export interface Release {

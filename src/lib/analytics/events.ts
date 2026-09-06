@@ -8,6 +8,7 @@ export type AnalyticsEventName =
   | "artifact_scan"
   | "artifact_first_access"
   | "artifact_play"
+  | "track_preview_play"
   | "preorder"
   | "subscription_started";
 

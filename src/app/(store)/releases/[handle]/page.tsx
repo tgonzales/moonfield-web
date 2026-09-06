@@ -5,6 +5,8 @@ import { getReleaseByHandle } from "@/content/releases";
 import { getArtistByHandle } from "@/content/artists";
 import { getProductByHandle } from "@/lib/shopify/catalog";
 import { ProductCard } from "@/components/store/product-card";
+import { TrackPlayer } from "@/components/store/track-player";
+import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
 
 export default async function ReleasePage({
   params,
@@ -36,6 +38,17 @@ export default async function ReleasePage({
           {release.releaseDate && <p className="mt-2 text-sm text-muted-foreground">{release.releaseDate}</p>}
         </div>
       </div>
+
+      {release.tracks.length > 0 && (
+        <TrackPlayer
+          releaseHandle={release.handle}
+          tracks={release.tracks.map((t) => ({
+            title: t.title,
+            durationSeconds: t.durationSeconds,
+            streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
+          }))}
+        />
+      )}
 
       <div>
         <h2 className="mb-4 font-serif text-2xl">Shop this release</h2>

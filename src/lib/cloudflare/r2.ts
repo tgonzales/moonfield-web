@@ -23,19 +23,32 @@ const endpoint = process.env.R2_ENDPOINT ?? (accountId ? `https://${accountId}.r
 export const isR2Configured = Boolean(endpoint && accessKeyId && secretAccessKey && bucket);
 
 /**
- * Optional public bucket (separate from the private one above) for assets
- * that are fine to serve without signing — nothing reads from it yet.
- * Kept for when a specific asset class (e.g. artifact cover thumbnails)
- * doesn't need the signed-URL indirection.
+ * Public bucket (separate from the private one above) for assets that are
+ * fine to serve without signing — track previews for the storefront player
+ * (PRD-adjacent: "listen before you buy" is not the gated Artifact
+ * experience, so it doesn't need a signed, expiring URL).
  */
+const publicBucket = process.env.R2_PUBLIC_BUCKET;
 const publicBaseUrl = process.env.R2_PUBLIC_URL;
 export const isR2PublicConfigured = Boolean(publicBaseUrl);
+const isR2PublicWriteConfigured = Boolean(endpoint && accessKeyId && secretAccessKey && publicBucket);
 
 export function publicAssetUrl(key: string): string {
   if (!publicBaseUrl) {
     throw new Error("R2_PUBLIC_URL is not configured.");
   }
-  return `${publicBaseUrl}/${key}`;
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  return `${publicBaseUrl}/${encodedKey}`;
+}
+
+/** Only ever called from /scripts — never from a request handler. */
+export async function putPublicAsset(key: string, body: Buffer, contentType: string): Promise<void> {
+  if (!isR2PublicWriteConfigured) {
+    throw new Error("Cloudflare R2 public bucket is not configured (missing endpoint, bucket or credentials).");
+  }
+  await client().send(
+    new PutObjectCommand({ Bucket: publicBucket, Key: key, Body: body, ContentType: contentType }),
+  );
 }
 
 const DEFAULT_SIGNED_URL_TTL_SECONDS = Number(process.env.R2_SIGNED_URL_TTL_SECONDS ?? 3600);

@@ -3,6 +3,9 @@ import Image from "next/image";
 import { getProductByHandle } from "@/lib/shopify/catalog";
 import { ProductVariantPicker } from "@/components/store/product-variant-picker";
 import { Badge } from "@/components/ui/badge";
+import { TrackPlayer, type PlayerTrack } from "@/components/store/track-player";
+import { getReleaseByHandle } from "@/content/releases";
+import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
 
 export default async function ProductPage({
   params,
@@ -16,6 +19,13 @@ export default async function ProductPage({
   const { raw } = product;
   const images = raw.images.edges.map((e) => e.node);
   const variants = raw.variants.edges.map((e) => e.node);
+
+  const release = product.releaseHandle ? getReleaseByHandle(product.releaseHandle) : undefined;
+  const playerTracks: PlayerTrack[] | undefined = release?.tracks.map((t) => ({
+    title: t.title,
+    durationSeconds: t.durationSeconds,
+    streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
+  }));
 
   return (
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
@@ -55,6 +65,9 @@ export default async function ProductPage({
             className="prose prose-sm max-w-none text-muted-foreground"
             dangerouslySetInnerHTML={{ __html: raw.descriptionHtml }}
           />
+        )}
+        {release && playerTracks && playerTracks.length > 0 && (
+          <TrackPlayer tracks={playerTracks} releaseHandle={release.handle} />
         )}
       </div>
     </div>
