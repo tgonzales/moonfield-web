@@ -49,30 +49,32 @@ export function ReleaseLayout({
 
         {selected ? (
           <div className="flex flex-col gap-4">
-            <div className="flex gap-2">
-              {options.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setSelectedKey(option.key)}
-                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                    option.key === selectedKey
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border hover:border-foreground"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {options.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSelectedKey(option.key)}
+                    className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                      option.key === selectedKey
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border hover:border-foreground"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="flex items-center gap-3">
-              <p className="text-lg">
-                {variant && <Price amount={variant.price.amount} currencyCode={variant.price.currencyCode} />}
-              </p>
-              {selected.product.status !== "AVAILABLE" && (
-                <Badge variant="secondary">{selected.product.status}</Badge>
-              )}
+              <div className="flex items-center gap-2">
+                <p className="text-lg">
+                  {variant && <Price amount={variant.price.amount} currencyCode={variant.price.currencyCode} />}
+                </p>
+                {selected.product.status !== "AVAILABLE" && (
+                  <Badge variant="secondary">{selected.product.status}</Badge>
+                )}
+              </div>
             </div>
 
             {variant && (
