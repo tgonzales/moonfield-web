@@ -1,0 +1,90 @@
+/* Design tokens ported from the original index.html (Design Canvas artifact). */
+:root {
+  --bg: #FAFAF7;
+  --secondary: #F1F1EC;
+  --text: #111111;
+  --muted: rgba(17, 17, 17, 0.55);
+  --faint: rgba(17, 17, 17, 0.38);
+  --accent: #7B8A74;
+  --line: rgba(17, 17, 17, 0.10);
+  --line-strong: rgba(17, 17, 17, 0.22);
+  --stripe: rgba(17, 17, 17, 0.028);
+  --shadow: 0 24px 60px -30px rgba(17, 17, 17, 0.22);
+  --nav-bg: rgba(250, 250, 247, 0.72);
+}
+
+[data-theme="dark"] {
+  --bg: #121210;
+  --secondary: #1b1b18;
+  --text: #FAFAF7;
+  --muted: rgba(250, 250, 247, 0.58);
+  --faint: rgba(250, 250, 247, 0.36);
+  --accent: #9aa891;
+  --line: rgba(250, 250, 247, 0.12);
+  --line-strong: rgba(250, 250, 247, 0.26);
+  --stripe: rgba(250, 250, 247, 0.04);
+  --shadow: 0 24px 70px -30px rgba(0, 0, 0, 0.6);
+  --nav-bg: rgba(18, 18, 16, 0.66);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.6s ease, color 0.6s ease;
+}
+
+.mf-home a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.35s ease;
+}
+
+.mf-home a:hover {
+  color: var(--text);
+}
+
+.mf-home ::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+@keyframes mf-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
+}
+
+.mf-home .nav-toggle:hover {
+  border-color: var(--text);
+}
+
+.mf-home .cta-primary:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mf-home .cta-secondary:hover {
+  border-color: var(--text);
+}
+
+.mf-home .artist-image-wrap:hover {
+  transform: scale(0.99);
+}
+
+.mf-home .discover-link:hover {
+  color: var(--accent);
+}
+
+.mf-home .album-cover:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 40px 80px -34px rgba(17, 17, 17, 0.35);
+}
+
+.mf-home .footer-link:hover {
+  color: var(--text);
+}

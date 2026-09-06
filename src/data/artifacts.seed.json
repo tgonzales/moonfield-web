@@ -1,0 +1,13 @@
+[
+  {
+    "artifactId": "art_0001",
+    "token": "8F72K91QRT",
+    "releaseHandle": "hello-how-can-i-help-you",
+    "trackTitle": "Tangerine",
+    "campaign": "nix-launch",
+    "status": "UNUSED",
+    "edition": { "number": 1, "of": 100 },
+    "accessCount": 0,
+    "createdAt": "2026-09-06T00:00:00.000Z"
+  }
+]

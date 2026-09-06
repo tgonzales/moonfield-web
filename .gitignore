@@ -1,1 +1,24 @@
 .DS_Store
+
+# env
+.env
+.env*.local
+
+# next.js
+/.next/
+/out/
+
+# node
+/node_modules
+npm-debug.log*
+pnpm-debug.log*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# dev-only artifact store (see src/lib/artifacts/store.ts)
+src/data/artifacts.dev.json
