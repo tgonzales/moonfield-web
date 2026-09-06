@@ -18,47 +18,60 @@ function formatDuration(seconds?: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Track listing + preview player shown on every product/release page (not the gated Digital Artifact experience). */
+/**
+ * Track listing + preview player shown on every product/release page (not
+ * the gated Digital Artifact experience). Two distinct actions on purpose:
+ * clicking a track plays just that one track; "Stream" always (re)starts
+ * the whole release from track 1 and auto-advances through it.
+ */
 export function TrackPlayer({ tracks, releaseHandle }: { tracks: PlayerTrack[]; releaseHandle: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isQueueMode, setIsQueueMode] = useState(false);
 
   const hasAnyStream = tracks.some((t) => t.streamUrl);
 
-  function playTrack(index: number) {
+  function startTrack(index: number, queueMode: boolean) {
     const audio = audioRef.current;
     const trackToPlay = tracks[index];
     if (!audio || !trackToPlay?.streamUrl) return;
 
-    if (currentIndex === index) {
-      if (isPlaying) {
-        audio.pause();
-      } else {
-        void audio.play();
-      }
-      return;
-    }
-
     audio.src = trackToPlay.streamUrl;
     setCurrentIndex(index);
+    setIsQueueMode(queueMode);
     void audio.play();
-    track({ name: "track_preview_play", properties: { releaseHandle, track: trackToPlay.title } });
+    track({ name: "track_preview_play", properties: { releaseHandle, track: trackToPlay.title, queueMode } });
   }
 
-  function playFromStart() {
+  /** Row click: toggle pause/resume if it's already the active track, otherwise play just that track. */
+  function handleRowClick(index: number) {
+    const audio = audioRef.current;
+    if (currentIndex === index && audio) {
+      if (isPlaying) audio.pause();
+      else void audio.play();
+      return;
+    }
+    startTrack(index, false);
+  }
+
+  /** Stream button: always (re)starts the whole release from track 1. */
+  function handleStreamClick() {
     const firstPlayable = tracks.findIndex((t) => t.streamUrl);
-    if (firstPlayable !== -1) playTrack(firstPlayable);
+    if (firstPlayable !== -1) startTrack(firstPlayable, true);
   }
 
   function handleEnded() {
-    if (currentIndex === null) return;
+    if (!isQueueMode || currentIndex === null) {
+      setIsPlaying(false);
+      return;
+    }
     const nextIndex = tracks.findIndex((t, i) => i > currentIndex && t.streamUrl);
     if (nextIndex !== -1) {
-      playTrack(nextIndex);
+      startTrack(nextIndex, true);
     } else {
       setIsPlaying(false);
-      setCurrentIndex(null);
+      setIsQueueMode(false);
     }
   }
 
@@ -72,23 +85,9 @@ export function TrackPlayer({ tracks, releaseHandle }: { tracks: PlayerTrack[]; 
         className="hidden"
       />
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-fit gap-2"
-        disabled={!hasAnyStream}
-        onClick={() => {
-          if (currentIndex !== null && isPlaying) {
-            audioRef.current?.pause();
-          } else if (currentIndex !== null) {
-            void audioRef.current?.play();
-          } else {
-            playFromStart();
-          }
-        }}
-      >
-        {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-        {isPlaying ? "Pause" : "Stream"}
+      <Button variant="outline" size="sm" className="w-fit gap-2" disabled={!hasAnyStream} onClick={handleStreamClick}>
+        <Play className="size-4" />
+        Stream
       </Button>
 
       <ol className="flex flex-col divide-y">
@@ -98,7 +97,7 @@ export function TrackPlayer({ tracks, releaseHandle }: { tracks: PlayerTrack[]; 
             <li key={`${t.title}-${i}`} className="flex items-center gap-3 py-2 text-sm">
               <button
                 type="button"
-                onClick={() => playTrack(i)}
+                onClick={() => handleRowClick(i)}
                 disabled={!t.streamUrl}
                 aria-label={isCurrent && isPlaying ? `Pause ${t.title}` : `Play ${t.title}`}
                 className="flex size-6 shrink-0 items-center justify-center rounded-full border text-xs disabled:cursor-not-allowed disabled:opacity-30"
