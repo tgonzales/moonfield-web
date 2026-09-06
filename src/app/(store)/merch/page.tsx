@@ -10,10 +10,15 @@ export default async function MerchPage() {
     return <p className="text-sm text-muted-foreground">Shopify is not configured yet.</p>;
   }
 
+  // CD/Vinyl are PHYSICAL but are music formats, not merch — they belong on /music.
+  const MUSIC_FORMATS = new Set(["CD", "Vinyl"]);
+
   const merchCollection = await getCollectionByHandle("merch");
   const products = merchCollection
     ? merchCollection.products
-    : (await getProducts(50)).filter((p) => p.productType === "PHYSICAL");
+    : (await getProducts(50)).filter(
+        (p) => p.productType === "PHYSICAL" && !MUSIC_FORMATS.has(p.raw.productType),
+      );
 
   return (
     <div className="flex flex-col gap-8">

@@ -5,9 +5,14 @@ import { ProductCard } from "@/components/store/product-card";
 
 export const metadata = { title: "Music — Moonfield Store" };
 
+// CD/Vinyl are PHYSICAL but are music formats — they belong here alongside digital albums.
+const MUSIC_FORMATS = new Set(["CD", "Vinyl"]);
+
 export default async function MusicPage() {
   const products = isShopifyConfigured ? await getProducts(50) : [];
-  const digital = products.filter((p) => p.productType === "DIGITAL");
+  const music = products.filter(
+    (p) => p.productType === "DIGITAL" || MUSIC_FORMATS.has(p.raw.productType),
+  );
 
   return (
     <div className="flex flex-col gap-10">
@@ -18,9 +23,9 @@ export default async function MusicPage() {
         </Link>
       </div>
 
-      {digital.length === 0 ? (
+      {music.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Digital albums are not listed in Shopify yet — browse{" "}
+          No music products are listed in Shopify yet — browse{" "}
           <Link href="/releases" className="underline">
             releases
           </Link>{" "}
@@ -28,7 +33,7 @@ export default async function MusicPage() {
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4">
-          {digital.map((product) => (
+          {music.map((product) => (
             <ProductCard key={product.handle} product={product} />
           ))}
         </div>

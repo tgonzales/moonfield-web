@@ -25,7 +25,7 @@ export const RELEASES: Release[] = [
       { title: "Chasing You", durationSeconds: 436 },
       { title: "Fragments of a Forgotten Dawn", durationSeconds: 263 },
     ],
-    productHandles: [],
+    productHandles: ["human-machine-digital", "human-machine-cd", "human-machine-vinyl"],
   },
   {
     handle: "hello-how-can-i-help-you",
