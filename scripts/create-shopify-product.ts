@@ -16,10 +16,19 @@
  * Requires SHOPIFY_ADMIN_API_TOKEN with write_products (+ read_products)
  * access scope. Requires SHOPIFY_STORE_DOMAIN to be reachable and correct.
  */
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { adminGraphQL } from "../src/lib/shopify/admin-client";
 import { getReleaseByHandle } from "../src/content/releases";
 import { getArtistByHandle } from "../src/content/artists";
 import type { FulfillmentProviderId, ProductType, ProductionMode } from "../src/lib/domain";
+
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
 
 type Format = "digital" | "cd" | "vinyl";
 
@@ -82,6 +91,50 @@ const PRODUCT_SET_MUTATION = `
   }
 `;
 
+const STAGED_UPLOADS_CREATE_MUTATION = `
+  mutation StagedUploadsCreate($input: [StagedUploadInput!]!) {
+    stagedUploadsCreate(input: $input) {
+      stagedTargets {
+        url
+        resourceUrl
+        parameters { name value }
+      }
+      userErrors { field message }
+    }
+  }
+`;
+
+/** Stages the cover image on Shopify's upload host and returns a resourceUrl usable as ProductSetInput.files[].originalSource. */
+async function stageCoverImage(filePath: string): Promise<{ resourceUrl: string; filename: string }> {
+  const filename = path.basename(filePath);
+  const mimeType = IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()];
+  if (!mimeType) throw new Error(`Unrecognized image extension for "${filename}".`);
+
+  const fileSize = statSync(filePath).size;
+
+  const staged = await adminGraphQL<{
+    stagedUploadsCreate: {
+      stagedTargets: { url: string; resourceUrl: string; parameters: { name: string; value: string }[] }[];
+      userErrors: ShopifyUserError[];
+    };
+  }>(STAGED_UPLOADS_CREATE_MUTATION, {
+    input: [{ resource: "IMAGE", filename, mimeType, httpMethod: "POST", fileSize: String(fileSize) }],
+  });
+  assertNoUserErrors(staged.stagedUploadsCreate.userErrors);
+
+  const target = staged.stagedUploadsCreate.stagedTargets[0];
+  const form = new FormData();
+  for (const param of target.parameters) form.append(param.name, param.value);
+  form.append("file", new Blob([readFileSync(filePath)], { type: mimeType }), filename);
+
+  const uploadRes = await fetch(target.url, { method: "POST", body: form });
+  if (!uploadRes.ok) {
+    throw new Error(`Cover image upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
+  }
+
+  return { resourceUrl: target.resourceUrl, filename };
+}
+
 const VARIANTS_BULK_UPDATE_MUTATION = `
   mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
     productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -111,7 +164,7 @@ async function main() {
 
   if (!releaseHandle || !format || !price) {
     console.error(
-      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active]",
+      "Usage: pnpm shopify:product --release <handle> --format <digital|cd|vinyl> --price <n> [--sku <s>] [--compare-at <n>] [--status draft|active] [--cover skip]",
     );
     process.exit(1);
   }
@@ -131,7 +184,7 @@ async function main() {
 
   const productHandle = `${release.handle}-${format}`;
 
-  const input = {
+  const input: Record<string, unknown> = {
     title: `${release.title} (${preset.label})`,
     handle: productHandle,
     vendor: artist?.name ?? "Moonfield Records",
@@ -146,6 +199,19 @@ async function main() {
       { namespace: "custom", key: "release_handle", type: "single_line_text_field", value: release.handle },
     ],
   };
+
+  let coverUploaded = false;
+  if (args.cover !== "skip") {
+    const coverPath = path.join(process.cwd(), "public", release.coverImage);
+    if (existsSync(coverPath)) {
+      console.log(`Uploading cover image (${coverPath})...`);
+      const { resourceUrl, filename } = await stageCoverImage(coverPath);
+      input.files = [{ originalSource: resourceUrl, contentType: "IMAGE", filename, alt: release.title }];
+      coverUploaded = true;
+    } else {
+      console.warn(`Cover image not found at ${coverPath} — skipping.`);
+    }
+  }
 
   console.log(`Creating/updating "${input.title}" (${productHandle})...`);
 
@@ -173,7 +239,13 @@ async function main() {
 
   console.log(`Done: ${product.handle} (${product.status}) — price set to ${price}`);
   console.log(`Product GID: ${product.id}`);
-  console.log("Note: no cover image was uploaded — add one manually in Shopify admin for now.");
+  if (!coverUploaded) {
+    console.log("Note: no cover image was uploaded — add one manually in Shopify admin for now.");
+  }
+  console.log(
+    "Note: status ACTIVE alone does not make a product purchasable — it also needs to be published " +
+      "to a sales channel (e.g. Headless) in Shopify admin. Not automated here (needs read/write_publications scope).",
+  );
 }
 
 main().catch((error) => {
