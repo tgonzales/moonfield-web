@@ -46,23 +46,26 @@ export default async function ReleasePage({
           </div>
 
           {formatOptions.length > 0 ? (
-            <FormatSwitcher options={formatOptions} />
+            <FormatSwitcher
+              options={formatOptions}
+              trackPlayer={
+                release.tracks.length > 0 ? (
+                  <TrackPlayer
+                    releaseHandle={release.handle}
+                    tracks={release.tracks.map((t) => ({
+                      title: t.title,
+                      durationSeconds: t.durationSeconds,
+                      streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
+                    }))}
+                  />
+                ) : undefined
+              }
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Products for this release are coming soon.</p>
           )}
         </div>
       </div>
-
-      {release.tracks.length > 0 && (
-        <TrackPlayer
-          releaseHandle={release.handle}
-          tracks={release.tracks.map((t) => ({
-            title: t.title,
-            durationSeconds: t.durationSeconds,
-            streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
-          }))}
-        />
-      )}
     </div>
   );
 }

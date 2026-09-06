@@ -4,6 +4,8 @@ import { getProductByHandle } from "@/lib/shopify/catalog";
 import { ProductVariantPicker } from "@/components/store/product-variant-picker";
 import { Badge } from "@/components/ui/badge";
 import { TrackPlayer, type PlayerTrack } from "@/components/store/track-player";
+import { ExpandableText } from "@/components/store/expandable-text";
+import { CreditsBlock } from "@/components/store/credits-block";
 import { getReleaseByHandle } from "@/content/releases";
 import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
 
@@ -60,15 +62,11 @@ export default async function ProductPage({
         </div>
         <h1 className="font-serif text-3xl">{raw.title}</h1>
         <ProductVariantPicker productHandle={product.handle} variants={variants} />
-        {raw.descriptionHtml && (
-          <div
-            className="prose prose-sm max-w-none text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: raw.descriptionHtml }}
-          />
-        )}
+        {raw.descriptionHtml && <ExpandableText html={raw.descriptionHtml} maxChars={200} />}
         {release && playerTracks && playerTracks.length > 0 && (
           <TrackPlayer tracks={playerTracks} releaseHandle={release.handle} />
         )}
+        {product.credits && <CreditsBlock credits={product.credits} />}
       </div>
     </div>
   );
