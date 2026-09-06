@@ -6,6 +6,7 @@ import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ExpandableText } from "./expandable-text";
 import { CreditsBlock } from "./credits-block";
 import { Price } from "./price";
+import { TrackPlayer, type PlayerTrack } from "./track-player";
 import type { MoonfieldProduct } from "@/lib/domain";
 import type { ShopifyProduct } from "@/lib/shopify/types";
 
@@ -23,20 +24,27 @@ export interface FormatOption {
  * format is selected — so one component owns that state and lays out
  * both columns, rather than each column managing it independently.
  *
- * `cover`, `header` and `trackPlayer` are Server Component subtrees
- * (image rendering, R2 URL resolution) handed down as props so this
- * Client Component can position them without fetching anything itself.
+ * TrackPlayer is built here (not passed as a ready node) because its
+ * mobile Description/Credits modal buttons need the *currently selected*
+ * format's copy — `tracks` themselves are plain server-resolved data
+ * (R2 URLs), not JSX, so there's no Server/Client boundary issue passing
+ * them down as a prop.
+ *
+ * `cover` and `header` don't depend on the selected format, so they stay
+ * as Server Component subtrees handed down as props.
  */
 export function ReleaseLayout({
   cover,
   header,
   options,
-  trackPlayer,
+  tracks,
+  releaseHandle,
 }: {
   cover: ReactNode;
   header: ReactNode;
   options: FormatOption[];
-  trackPlayer?: ReactNode;
+  tracks: PlayerTrack[];
+  releaseHandle: string;
 }) {
   const [selectedKey, setSelectedKey] = useState(options[0]?.key);
   const selected = options.find((o) => o.key === selectedKey) ?? options[0];
@@ -89,15 +97,28 @@ export function ReleaseLayout({
           <p className="text-sm text-muted-foreground">Products for this release are coming soon.</p>
         )}
 
-        {selected?.product.credits && <CreditsBlock credits={selected.product.credits} />}
+        {selected?.product.credits && (
+          <div className="hidden md:block">
+            <CreditsBlock credits={selected.product.credits} />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-6">
         {header}
         {selected?.product.raw.descriptionHtml && (
-          <ExpandableText html={selected.product.raw.descriptionHtml} maxChars={200} />
+          <div className="hidden md:block">
+            <ExpandableText html={selected.product.raw.descriptionHtml} maxChars={200} />
+          </div>
         )}
-        {trackPlayer}
+        {tracks.length > 0 && (
+          <TrackPlayer
+            releaseHandle={releaseHandle}
+            tracks={tracks}
+            description={selected?.product.raw.descriptionHtml}
+            credits={selected?.product.credits}
+          />
+        )}
       </div>
     </div>
   );

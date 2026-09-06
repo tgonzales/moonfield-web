@@ -4,7 +4,6 @@ import Link from "next/link";
 import { getReleaseByHandle } from "@/content/releases";
 import { getArtistByHandle } from "@/content/artists";
 import { getProductByHandle } from "@/lib/shopify/catalog";
-import { TrackPlayer } from "@/components/store/track-player";
 import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
 import { ReleaseLayout, type FormatOption } from "@/components/store/release-layout";
 import { formatKeyFor, formatLabelFor } from "@/components/store/format-utils";
@@ -47,18 +46,12 @@ export default async function ReleasePage({
           {release.releaseDate && <p className="mt-2 text-sm text-muted-foreground">{release.releaseDate}</p>}
         </div>
       }
-      trackPlayer={
-        release.tracks.length > 0 ? (
-          <TrackPlayer
-            releaseHandle={release.handle}
-            tracks={release.tracks.map((t) => ({
-              title: t.title,
-              durationSeconds: t.durationSeconds,
-              streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
-            }))}
-          />
-        ) : undefined
-      }
+      releaseHandle={release.handle}
+      tracks={release.tracks.map((t) => ({
+        title: t.title,
+        durationSeconds: t.durationSeconds,
+        streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
+      }))}
     />
   );
 }

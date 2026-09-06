@@ -62,11 +62,24 @@ export default async function ProductPage({
         </div>
         <h1 className="font-serif text-3xl">{raw.title}</h1>
         <ProductVariantPicker productHandle={product.handle} variants={variants} />
-        {raw.descriptionHtml && <ExpandableText html={raw.descriptionHtml} maxChars={200} />}
-        {release && playerTracks && playerTracks.length > 0 && (
-          <TrackPlayer tracks={playerTracks} releaseHandle={release.handle} />
+        {raw.descriptionHtml && (
+          <div className="hidden md:block">
+            <ExpandableText html={raw.descriptionHtml} maxChars={200} />
+          </div>
         )}
-        {product.credits && <CreditsBlock credits={product.credits} />}
+        {release && playerTracks && playerTracks.length > 0 && (
+          <TrackPlayer
+            tracks={playerTracks}
+            releaseHandle={release.handle}
+            description={raw.descriptionHtml}
+            credits={product.credits}
+          />
+        )}
+        {product.credits && (
+          <div className="hidden md:block">
+            <CreditsBlock credits={product.credits} />
+          </div>
+        )}
       </div>
     </div>
   );
