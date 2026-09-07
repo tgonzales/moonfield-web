@@ -6,8 +6,14 @@
  * for that case).
  *
  * Usage:
- *   pnpm release:upload --release human-machine --kind master-wav --file ./01.wav
  *   pnpm release:upload --release human-machine --kind stream --file ./01.mp3 --key 01-weight-of-time.mp3 --public
+ *   pnpm release:upload --release human-machine --kind download --file ./human-machine.zip --key human-machine.zip
+ *
+ * `download` is the one purchase-fulfillment artifact per release (a single
+ * pre-built ZIP of the FLACs, private bucket) — see docs/release-playbook.md
+ * §2. `master-wav`/`hd-flac` per-track kinds still work but are no longer
+ * part of the default flow now that Google Drive is the archive for
+ * individual masters; only use them for a one-off backup upload.
  *
  * --public writes to the public bucket (R2_PUBLIC_BUCKET) and prints the
  * permanent public URL — use only for content that's fine to be openly
@@ -26,6 +32,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
+  ".zip": "application/zip",
 };
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {

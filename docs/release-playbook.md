@@ -31,41 +31,73 @@ producing the release.
 
 ## 2. Per-track audio processing + R2 upload
 
+**Storage model (as of 2026-09-07):** individual master WAV/FLAC files are
+archived by the user in Google Drive, not duplicated into R2 — R2 only
+stores what's actually *served*: the public preview stream (per track) and
+one pre-built ZIP per release (the purchase-fulfillment artifact, since
+Moonfield sells releases, not individual tracks — no per-track digital
+download exists or is planned). This replaced an earlier approach that also
+uploaded every master WAV/FLAC to R2 individually; those older objects
+(`releases/<handle>/master-wav/`, `.../hd-flac/`) are left in place for
+releases shipped before this change (not backed up to Drive yet) — don't
+delete them without checking with the user first.
+
 Pick a release `handle` (kebab-case, matches the album title) and a
 zero-padded numeric slug per track, e.g. `01-track-title`. For each track:
 
 ```bash
-# 1. Lossless archival copy
+# 1. Lossless copy, kept locally (not uploaded individually — see below)
 ffmpeg -y -i "<master.wav>" -c:a flac "<slug>.flac"
 
 # 2. Full-length preview stream (NOT trimmed — the 60s cap in
 #    src/components/store/track-player.tsx is client-side only, see below)
 ffmpeg -y -i "<master.wav>" -c:a libmp3lame -b:a 256k "<slug>.mp3"
 
-# 3. Upload all three — private bucket for WAV/FLAC, public for the stream
-pnpm release:upload --release <handle> --kind master-wav --file "<master.wav>" --key "<slug>.wav"
-pnpm release:upload --release <handle> --kind hd-flac    --file "<slug>.flac"   --key "<slug>.flac"
-pnpm release:upload --release <handle> --kind stream     --file "<slug>.mp3"    --key "<slug>.mp3" --public
+# 3. Upload only the stream preview (public bucket)
+pnpm release:upload --release <handle> --kind stream --file "<slug>.mp3" --key "<slug>.mp3" --public
+```
+
+Do this for every track, keeping each `<slug>.flac` on disk (e.g. in the same
+local folder as the source WAVs) — don't delete them. Once every track is
+encoded, zip the FLACs into one archive and upload just that:
+
+```bash
+# From the folder containing all the .flac files for this release
+zip -j "<handle>.zip" *.flac
+
+# Private bucket — this is the file a customer's purchase eventually unlocks
+pnpm release:upload --release <handle> --kind download --file "<handle>.zip" --key "<handle>.zip"
 ```
 
 This lands objects at:
-- `r2://releases/<handle>/master-wav/<slug>.wav` (private)
-- `r2://releases/<handle>/hd-flac/<slug>.flac` (private)
-- public: `releases/<handle>/stream/<slug>.mp3`
+- public: `releases/<handle>/stream/<slug>.mp3` (one per track)
+- `r2://releases/<handle>/download/<handle>.zip` (private, one per release)
 
-**Why two buckets:** the public bucket is "listen before you buy" — openly
-streamable, no signing overhead, architecturally separate from the gated
-Digital Artifact experience. **Known tradeoff:** this means the full MP3 is
-directly fetchable by anyone who finds the URL — the 60-second cap
-(`PREVIEW_LIMIT_SECONDS` in `src/components/store/track-player.tsx`) only
-stops playback client-side, it is not real DRM. Don't "fix" this by moving
-previews to signed URLs unless asked; if real protection is ever wanted, the
-correct fix is serving actual trimmed clips, not signing the full files.
+Leave the local WAV masters and the `.flac` files where they are — the user
+archives them to Google Drive separately, on their own schedule. Don't
+delete local FLAC/WAV files after this step; unlike the MP3 stream files
+(fully reproducible from the WAV at any time), right now the FLACs are not
+yet backed up anywhere else.
+
+**Why the stream preview is a separate public bucket:** "listen before you
+buy" — openly streamable, no signing overhead, architecturally separate from
+the gated Digital Artifact experience. **Known tradeoff:** this means the
+full MP3 is directly fetchable by anyone who finds the URL — the 60-second
+cap (`PREVIEW_LIMIT_SECONDS` in `src/components/store/track-player.tsx`)
+only stops playback client-side, it is not real DRM. Don't "fix" this by
+moving previews to signed URLs unless asked; if real protection is ever
+wanted, the correct fix is serving actual trimmed clips, not signing the
+full files.
 
 Get each track's duration for the content step below with:
 ```bash
 ffprobe -v error -show_entries format=duration -of csv=p=0 "<master.wav>"
 ```
+
+**Note:** actual purchase fulfillment (emailing/serving a signed URL to the
+ZIP when an order pays) is not built yet — `src/lib/fulfillment/adapters/
+digital-delivery.adapter.ts` is still a stub. This step only gets the ZIP
+into R2 so it's ready once that's built.
 
 ## 3. Add the release to the content layer
 
