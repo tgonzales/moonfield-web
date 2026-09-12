@@ -1,18 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { artifacts } from "@/lib/db/schema";
 import type { Artifact, ArtifactAssets, ArtifactStatus } from "@/lib/domain";
 import { generateArtifactToken } from "./token";
 
 /**
- * ArtifactStore is the seam: swap this file's implementation for a real
- * database (Postgres, Vercel KV...) once one exists. Everything else
- * (routes, the artifact landing page, the /scripts uploaders) only ever
- * calls these functions.
+ * ArtifactStore is the seam: routes, the artifact landing page, and the
+ * /scripts uploaders only ever call these functions, never the DB directly.
  *
- * The JSON-file implementation below is dev/demo-only — Vercel's
- * production filesystem is read-only/ephemeral, so writes here do not
- * persist across deployments or serverless invocations in production.
+ * Backed by Postgres (Drizzle, see src/lib/db) — replaces the earlier
+ * JSON-file implementation, which did not persist on Vercel's read-only
+ * production filesystem (see docs/database-schema.md).
  *
  * No `server-only` guard here: this module doubles as the write target for
  * the plain-Node scripts in /scripts, which `server-only` would break.
@@ -30,26 +29,40 @@ export interface ArtifactStore {
   revoke(token: string): Promise<void>;
 }
 
-const DATA_DIR = path.join(process.cwd(), "src", "data");
-const SEED_FILE = path.join(DATA_DIR, "artifacts.seed.json");
-const DEV_FILE = path.join(DATA_DIR, "artifacts.dev.json");
+type ArtifactRow = typeof artifacts.$inferSelect;
 
-function loadAll(): Artifact[] {
-  if (!existsSync(DEV_FILE)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-    const seed = existsSync(SEED_FILE) ? readFileSync(SEED_FILE, "utf-8") : "[]";
-    writeFileSync(DEV_FILE, seed);
-  }
-  return JSON.parse(readFileSync(DEV_FILE, "utf-8"));
+function toArtifact(row: ArtifactRow): Artifact {
+  return {
+    artifactId: row.artifactId,
+    token: row.token,
+    releaseHandle: row.releaseHandle,
+    trackTitle: row.trackTitle ?? undefined,
+    campaign: row.campaign ?? undefined,
+    status: row.status as ArtifactStatus,
+    edition:
+      row.editionNumber != null && row.editionOf != null
+        ? { number: row.editionNumber, of: row.editionOf }
+        : undefined,
+    ownerCustomerId: row.ownerCustomerId ?? undefined,
+    firstAccessAt: row.firstAccessAt?.toISOString(),
+    lastAccessAt: row.lastAccessAt?.toISOString(),
+    accessCount: row.accessCount,
+    createdAt: row.createdAt.toISOString(),
+    assets: {
+      audioKey: row.audioKey ?? undefined,
+      videoKey: row.videoKey ?? undefined,
+      storyKey: row.storyKey ?? undefined,
+      creditsKey: row.creditsKey ?? undefined,
+      lyricsKey: row.lyricsKey ?? undefined,
+      visualKeys: row.visualKeys ?? undefined,
+    },
+  };
 }
 
-function saveAll(artifacts: Artifact[]): void {
-  writeFileSync(DEV_FILE, JSON.stringify(artifacts, null, 2));
-}
-
-class JsonFileArtifactStore implements ArtifactStore {
+class DbArtifactStore implements ArtifactStore {
   async getByToken(token: string): Promise<Artifact | null> {
-    return loadAll().find((a) => a.token === token) ?? null;
+    const [row] = await db.select().from(artifacts).where(eq(artifacts.token, token)).limit(1);
+    return row ? toArtifact(row) : null;
   }
 
   async create(input: {
@@ -58,55 +71,65 @@ class JsonFileArtifactStore implements ArtifactStore {
     campaign?: string;
     edition?: Artifact["edition"];
   }): Promise<Artifact> {
-    const artifacts = loadAll();
-    const artifact: Artifact = {
-      artifactId: `art_${randomUUID()}`,
-      token: generateArtifactToken(),
-      releaseHandle: input.releaseHandle,
-      trackTitle: input.trackTitle,
-      campaign: input.campaign,
-      edition: input.edition,
-      status: "GENERATED",
-      accessCount: 0,
-      createdAt: new Date().toISOString(),
-    };
-    artifacts.push(artifact);
-    saveAll(artifacts);
-    return artifact;
+    const [row] = await db
+      .insert(artifacts)
+      .values({
+        artifactId: `art_${randomUUID()}`,
+        token: generateArtifactToken(),
+        releaseHandle: input.releaseHandle,
+        trackTitle: input.trackTitle,
+        campaign: input.campaign,
+        editionNumber: input.edition?.number,
+        editionOf: input.edition?.of,
+        status: "GENERATED",
+      })
+      .returning();
+    return toArtifact(row);
   }
 
   async recordAccess(token: string): Promise<Artifact | null> {
-    const artifacts = loadAll();
-    const artifact = artifacts.find((a) => a.token === token);
-    if (!artifact) return null;
+    const [existing] = await db.select().from(artifacts).where(eq(artifacts.token, token)).limit(1);
+    if (!existing) return null;
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const nextStatus: ArtifactStatus =
-      artifact.status === "GENERATED" || artifact.status === "UNUSED" ? "ACTIVATED" : "ACCESSED";
+      existing.status === "GENERATED" || existing.status === "UNUSED" ? "ACTIVATED" : "ACCESSED";
 
-    artifact.status = nextStatus;
-    artifact.firstAccessAt ??= now;
-    artifact.lastAccessAt = now;
-    artifact.accessCount += 1;
-
-    saveAll(artifacts);
-    return artifact;
+    const [row] = await db
+      .update(artifacts)
+      .set({
+        status: nextStatus,
+        firstAccessAt: existing.firstAccessAt ?? now,
+        lastAccessAt: now,
+        accessCount: existing.accessCount + 1,
+      })
+      .where(eq(artifacts.token, token))
+      .returning();
+    return toArtifact(row);
   }
 
   async updateAssets(token: string, assets: ArtifactAssets): Promise<Artifact | null> {
-    const artifacts = loadAll();
-    const artifact = artifacts.find((a) => a.token === token);
-    if (!artifact) return null;
+    // Partial merge, matching the old JSON store's `{ ...artifact.assets, ...assets }` —
+    // only overwrite the keys actually present in `assets`, never null out the rest.
+    const patch: Partial<typeof artifacts.$inferInsert> = {};
+    if ("audioKey" in assets) patch.audioKey = assets.audioKey;
+    if ("videoKey" in assets) patch.videoKey = assets.videoKey;
+    if ("storyKey" in assets) patch.storyKey = assets.storyKey;
+    if ("creditsKey" in assets) patch.creditsKey = assets.creditsKey;
+    if ("lyricsKey" in assets) patch.lyricsKey = assets.lyricsKey;
+    if ("visualKeys" in assets) patch.visualKeys = assets.visualKeys;
 
-    artifact.assets = { ...artifact.assets, ...assets };
-    saveAll(artifacts);
-    return artifact;
+    if (Object.keys(patch).length === 0) {
+      return this.getByToken(token);
+    }
+
+    const [row] = await db.update(artifacts).set(patch).where(eq(artifacts.token, token)).returning();
+    return row ? toArtifact(row) : null;
   }
 
   async revoke(token: string): Promise<void> {
-    const artifacts = loadAll().filter((a) => a.token !== token);
-    saveAll(artifacts);
+    await db.delete(artifacts).where(eq(artifacts.token, token));
   }
 }
 
-export const artifactStore: ArtifactStore = new JsonFileArtifactStore();
+export const artifactStore: ArtifactStore = new DbArtifactStore();
