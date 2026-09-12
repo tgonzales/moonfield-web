@@ -9,10 +9,9 @@ building.
 
 | Stays as-is | Moves into the DB |
 |---|---|
-| `src/content/releases.ts` / `artists.ts` (static, git-versioned) | Auth (new) |
-| Shopify: products, prices, variants, inventory, orders/payment | Digital Artifacts (`src/lib/artifacts/store.ts` — currently a JSON file, explicitly flagged as not persisting on Vercel) |
-| | Order/fulfillment tracking (currently not persisted at all) |
-| | Webhook dedupe (currently an in-memory `Set`, lost on every cold start) |
+| `src/content/releases.ts` / `artists.ts` (static, git-versioned) | Digital Artifacts (`src/lib/artifacts/store.ts` — was a JSON file, explicitly flagged as not persisting on Vercel) — **done, see below** |
+| Shopify: products, prices, variants, inventory, orders/payment | Order/fulfillment tracking (currently not persisted at all) |
+| Auth (delegated entirely to Shopify — see below, no local table) | Webhook dedupe (currently an in-memory `Set`, lost on every cold start) |
 
 **Why catalog content stays static:** no admin UI exists or is planned (the
 storefront is view-only by design), releases change rarely, and git review
@@ -26,44 +25,77 @@ JSON file (`src/data/artifacts.dev.json`) that won't persist on Vercel's
 read-only/ephemeral filesystem. That's a real production bug today, not a
 nice-to-have.
 
-## Suggested build order (independent of what you pick for auth)
+## Build order
 
-1. **Wire up the DB + ORM.** Migrate the artifact store onto it — fixes the
-   prod-persistence bug and proves the setup end-to-end with something small.
-2. **Auth tables** (Better Auth, email/password) — unblocks login and the
-   streaming-tier gate.
-3. **Order / webhook / digital-download tables** — unblocks real digital
-   fulfillment (the ZIP-per-release work in `docs/release-playbook.md`) and
-   makes the webhook handler idempotent under retries.
+1. ~~**Wire up the DB + ORM.** Migrate the artifact store onto it~~ — done
+   2026-09-12 (Neon + Drizzle, `artifact`/`artifact_access_event` tables).
+2. ~~**Auth**~~ — done 2026-09-12, and it turned out to need **no DB tables
+   at all** (see below) — decided against Better Auth in favor of Shopify's
+   own Customer Account API, since the goal is to lean on Shopify's stack
+   wherever it covers the need.
+3. **Order / webhook / digital-download tables** — next up. Unblocks real
+   digital fulfillment (the ZIP-per-release work in
+   `docs/release-playbook.md`) and makes the webhook handler idempotent
+   under retries.
 
 ## Entities
 
-### Auth (Better Auth's standard schema)
+### Auth — Shopify Customer Account API, no local table (done, 2026-09-12)
 
-Don't hand-author these — generate them from Better Auth's CLI/adapter once
-the ORM is chosen (`npx @better-auth/cli generate` or the Drizzle/Prisma
-adapter's migration), since the exact columns are Better Auth's contract and
-can shift between versions. Shape, for planning purposes:
+Originally planned as Better Auth (email/password, with `user`/`session`/
+`account`/`verification` tables). Changed after weighing it against leaning
+on Shopify's own stack wherever it covers the need: Shopify's **Customer
+Account API** does headless login via OAuth 2.0 + PKCE against Shopify's
+own hosted, **passwordless** login (email one-time code) — no password of
+ours to store, no verification/reset email to send ourselves, and an order
+placed by a logged-in customer already carries their Shopify identity.
 
-- **`user`** — id, name, email, emailVerified, image, createdAt, updatedAt
-- **`session`** — id, userId → user.id, token, expiresAt, ipAddress,
-  userAgent, createdAt, updatedAt
-- **`account`** — id, userId → user.id, accountId, providerId
-  (`"credential"` for email/password), password (hashed), createdAt,
-  updatedAt
-- **`verification`** — id, identifier, value, expiresAt, createdAt,
-  updatedAt (email verification + password reset tokens)
+Implementation lives entirely in `src/lib/shopify/customer-account/` and
+`src/app/auth/{login,callback,logout}`:
+- `config.ts` — reads the client id + the Authorization/Token/Logout
+  endpoint URLs from env (copied from Shopify Admin > Sales channels >
+  Headless > Customer Account API settings — Shopify's own setup guide has
+  you copy these directly rather than construct them). Discovers the
+  GraphQL API endpoint dynamically via `/.well-known/customer-account-api`
+  so the API version stays current without a hardcoded value.
+- `pkce.ts` / `tokens.ts` / `client.ts` — the OAuth mechanics (code
+  verifier/challenge/state/nonce, the authorization-code and refresh-token
+  exchanges, the Customer Account GraphQL call).
+- `session.ts` — the session lives in an **encrypted, httpOnly cookie**
+  (AES-256-GCM, `crypto.ts`, key from `AUTH_SESSION_SECRET`), not a DB row:
+  access token, refresh token, id token, expiry, customer id, email.
+  `getCustomerSession()` is intentionally read-only (Next.js won't allow
+  writing cookies during a Server Component render) — an expired session
+  just reads as logged-out rather than silently auto-refreshing; wiring a
+  refresh into a route handler / middleware is a follow-up, not done yet.
 
-Config: `emailAndPassword: { enabled: true }`, no OAuth providers. Email
-verification / password reset needs an email-sending provider wired in —
-not chosen yet, flag as a dependency when this phase starts.
+**No `user` table exists.** Anywhere the schema below would have referenced
+`user.id`, it now just holds the Shopify customer's GID (a plain string) —
+see the order-linking note below.
 
-### Digital Artifacts (replaces `src/data/artifacts.dev.json`)
+**Known gaps, called out explicitly rather than guessed at:** the logout
+endpoint's exact query parameters weren't confirmed against live testing
+(standard OIDC `id_token_hint`/`post_logout_redirect_uri` names are used —
+verify once `SHOPIFY_CUSTOMER_ACCOUNT_LOGOUT_URL` is actually set); and
+whether an order placed at checkout automatically carries the logged-in
+customer's identity (vs. needing the buyer's identity explicitly passed to
+cart/checkout) hasn't been investigated yet — that's the next thing to
+check before the order-linking design below can be fully trusted.
+
+**Setup still needed before this works (user-side, in Shopify Admin):**
+enable "Customer accounts" (Settings > Customer accounts), install the
+Headless sales channel if not already, register a **confidential** client
+under its Customer Account API settings with callback URL
+`<domain>/auth/callback`, and put the resulting client id + three endpoint
+URLs into `.env.local` (placeholders already added, see `.env.example`).
+Local testing needs an HTTPS tunnel (ngrok or similar) — Shopify rejects
+`localhost`/`http` redirect URIs outright.
+
+### Digital Artifacts (done, 2026-09-12 — replaced `src/data/artifacts.dev.json`)
 
 Mirrors the existing `Artifact` type in `src/lib/domain/artifact.ts` exactly,
 so `src/lib/artifacts/store.ts`'s interface (`getByToken`, `create`,
-`recordAccess`, `updateAssets`, `revoke`) can be reimplemented against the DB
-with no changes needed above that layer.
+`recordAccess`, `updateAssets`, `revoke`) needed no changes above that layer.
 
 - **`artifact`** — artifactId (pk), token (unique), releaseHandle,
   trackTitle (nullable), campaign (nullable), status (`GENERATED` |
@@ -71,15 +103,17 @@ with no changes needed above that layer.
   (nullable), ownerCustomerId (nullable — see note below), firstAccessAt
   (nullable), lastAccessAt (nullable), accessCount (default 0), createdAt,
   audioKey / videoKey / storyKey / creditsKey / lyricsKey (nullable, R2
-  keys), visualKeys (array of R2 keys)
+  keys), visualKeys (jsonb array of R2 keys)
 - **`artifact_access_event`** — id, artifactId → artifact.artifactId,
   accessedAt, ipHash (nullable). The `ArtifactAccessEvent` type already
-  exists in the domain layer but has nowhere to persist today — this gives
-  it a home.
+  existed in the domain layer but had nowhere to persist — this gives it a
+  home. (Not wired up to actually insert rows anywhere yet — the table
+  exists, nothing calls it.)
 
-`ownerCustomerId` can become a real FK to `user.id` once auth exists; keep it
-a loose nullable string until then (an artifact can be scanned/owned before
-any account system exists, e.g. a physical card scan by an anonymous fan).
+`ownerCustomerId` stays a loose nullable string (the Shopify customer GID,
+once known) — there's no `user` table to foreign-key to, and an artifact
+can be scanned/owned before any login happens at all (e.g. a physical card
+scan by an anonymous fan).
 
 ### Orders & digital fulfillment (currently: not persisted at all)
 
@@ -90,9 +124,10 @@ any account system exists, e.g. a physical card scan by an anonymous fan).
   (nullable), status (`PENDING` | `PROCESSED` | `FAILED`), error (nullable)
 
 - **`order`** — id (uuid), shopifyOrderId (unique), orderNumber,
-  customerEmail, userId (nullable FK → user.id — see linking note below),
-  status (`PENDING` | `PAID` | `CANCELLED` | `REFUNDED`, matches the
-  existing `OrderStatus` type), createdAt, updatedAt
+  customerEmail, shopifyCustomerId (nullable — Shopify's own customer GID,
+  not a local FK; see linking note below), status (`PENDING` | `PAID` |
+  `CANCELLED` | `REFUNDED`, matches the existing `OrderStatus` type),
+  createdAt, updatedAt
 
 - **`order_line_item`** — id, orderId → order.id, shopifyLineItemId,
   productHandle (Shopify product handle, e.g. `human-machine-digital`),
@@ -113,12 +148,18 @@ any account system exists, e.g. a physical card scan by an anonymous fan).
   lastDownloadedAt (nullable), expiresAt (nullable, optional link-expiry
   policy), createdAt
 
-**Order→user linking (guest checkout is the default):** Shopify checkout
-stays guest-friendly — no account required to buy. At `orders/paid` webhook
-time, look up `user` by `customerEmail`; set `order.userId` if found, else
-leave it null. On login, backfill: match `session.user.email` against any
-`order.customerEmail` with `userId IS NULL` and claim them. This is the
-standard pattern for bolting accounts onto an already-live guest checkout.
+**Order→customer linking:** the `orders/paid` webhook payload includes the
+Shopify customer id directly if the buyer was identified at checkout —
+store it straight into `order.shopifyCustomerId`, no lookup needed (unlike
+the earlier Better Auth-based plan, there's no separate local `user` table
+to join against). If checkout happened as a guest (no `customer` on the
+payload), `shopifyCustomerId` stays null and only `customerEmail` is known.
+**Open question, not yet investigated:** whether our headless cart/checkout
+flow currently carries a logged-in customer's identity through to Shopify's
+checkout at all, or if it's guest-only regardless of Customer Account API
+login state — that determines how often `shopifyCustomerId` actually gets
+populated automatically. Check `src/lib/shopify/cart.ts` / the checkout
+redirect before relying on this.
 
 **Digital download flow (replaces the `DigitalDeliveryAdapter` stub, which
 today unconditionally reports `DELIVERED` without producing anything):** on
@@ -141,13 +182,14 @@ disturbing anything above.
 ## Entity relationships
 
 ```
-user 1─* session
-user 1─* account
-user 1─0..* order            (nullable FK — guest orders allowed)
 order 1─* order_line_item
 order_line_item 1─0..1 digital_download
 artifact 1─* artifact_access_event
 ```
+
+No `user` table — `order.shopifyCustomerId` and `artifact.ownerCustomerId`
+hold a Shopify customer GID directly (a plain string, not a foreign key);
+Shopify's Customer Account API is the only identity provider.
 
 `artifact.releaseHandle` and `order_line_item.releaseHandle` are loose
 string references to `src/content/releases.ts` handles, not foreign keys —
@@ -155,15 +197,11 @@ there's no `release` table (see "what stays as-is" above).
 
 ## Open decisions (need your input before implementing)
 
-1. **Postgres provider + ORM.** Vercel no longer offers its own Postgres —
-   provisioning goes through the Marketplace now (Neon is the common
-   choice). For the ORM, Drizzle pairs directly with Better Auth's official
-   adapter and fits serverless/Fluid Compute better than Prisma's heavier
-   runtime. Both are just my default recommendation — say if you've already
-   picked something while setting up the database.
-2. **Phasing.** Build order above (artifacts → auth → orders) is a
-   suggestion, not a requirement — say if you want a different order or all
-   three at once.
-3. **Email delivery.** Both auth (verification/reset) and digital download
-   delivery need an outbound email provider — not chosen yet, out of scope
-   for this schema doc but will block both features from being fully live.
+1. ~~Postgres provider + ORM~~ — settled: Neon + Drizzle, both live.
+2. **Phasing.** Order/webhook/digital-download tables are next — say if you
+   want to sequence that differently.
+3. **Digital download delivery email.** Still needs an outbound email
+   provider (auth no longer does, now that it's Shopify-hosted) — not
+   chosen yet, will block the digital-download flow from being fully live.
+4. **Cart/checkout buyer identity**, flagged above — needs a look before the
+   order→customer linking design can be trusted to work as described.
