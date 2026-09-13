@@ -10,9 +10,13 @@
  * Shopify's own setup guide has you copy them directly from that admin
  * screen (they're not a documented, stable URL template), so they're
  * plain env vars. The GraphQL API endpoint is the one thing we discover
- * dynamically (`/.well-known/customer-account-api`, same origin as the
- * authorize endpoint), since that keeps the API version current
- * automatically instead of us hardcoding one.
+ * dynamically via `/.well-known/customer-account-api` — confirmed by hand
+ * (curl) that this lives on the store's own domain (SHOPIFY_STORE_DOMAIN,
+ * e.g. your-store.myshopify.com), NOT on the shopify.com/authentication/
+ * <shop_id> OAuth issuer domain the Authorization/Token URLs use. The two
+ * domains are unrelated; don't try to derive one from the other. Keeping
+ * this dynamic (rather than hardcoding a GraphQL URL) is what keeps the
+ * API version current automatically.
  */
 export interface CustomerAccountConfig {
   clientId: string;
@@ -49,9 +53,11 @@ export async function getCustomerAccountGraphqlUrl(): Promise<string> {
     return cachedGraphqlApiUrl.url;
   }
 
-  const { authorizeUrl } = getCustomerAccountConfig();
-  const origin = new URL(authorizeUrl).origin;
-  const res = await fetch(`${origin}/.well-known/customer-account-api`, { cache: "no-store" });
+  const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
+  if (!storeDomain) {
+    throw new Error("SHOPIFY_STORE_DOMAIN is not configured — needed to discover the Customer Account GraphQL endpoint.");
+  }
+  const res = await fetch(`https://${storeDomain}/.well-known/customer-account-api`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Failed to discover Customer Account API endpoint (${res.status}).`);
   }
