@@ -15,7 +15,14 @@ import type { ShopifyCart } from "@/lib/shopify/types";
 import { removeCartLine, updateCartLineQuantity } from "@/lib/cart/actions";
 import { formatMoney } from "@/components/store/price";
 
-export function CartSheet({ cart }: { cart: ShopifyCart | null }) {
+export function CartSheet({
+  cart,
+  checkoutHref,
+}: {
+  cart: ShopifyCart | null;
+  /** cart.checkoutUrl when signed in, /auth/login?returnTo=/cart otherwise — computed by the caller (needs the session). */
+  checkoutHref?: string;
+}) {
   const lines = cart?.lines.edges.map((e) => e.node) ?? [];
 
   return (
@@ -105,7 +112,7 @@ export function CartSheet({ cart }: { cart: ShopifyCart | null }) {
                 {formatMoney(cart.cost.subtotalAmount.amount, cart.cost.subtotalAmount.currencyCode)}
               </span>
             </div>
-            <Button render={<a href={cart.checkoutUrl} />} className="w-full">
+            <Button render={<a href={checkoutHref ?? cart.checkoutUrl} />} className="w-full">
               Checkout
             </Button>
           </SheetFooter>

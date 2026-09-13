@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { cormorantGaramond, inter, fontMono } from "@/components/marketing/fonts";
 import { Reveal } from "@/components/marketing/reveal";
 import { ParallaxLayer } from "@/components/marketing/parallax-layer";
@@ -72,6 +73,7 @@ export default function HomePage() {
           <a href="#discography" style={{ fontSize: 13, letterSpacing: "0.04em", color: "var(--muted)" }}>Discography</a>
           <a href="#licensing" style={{ fontSize: 13, letterSpacing: "0.04em", color: "var(--muted)" }}>Licensing</a>
           <a href="#contact" style={{ fontSize: 13, letterSpacing: "0.04em", color: "var(--muted)" }}>Contact</a>
+          <Link href="/releases" style={{ fontSize: 13, letterSpacing: "0.04em", color: "var(--muted)" }}>Shop</Link>
           <ThemeToggle className="nav-toggle" />
         </div>
       </nav>
@@ -352,6 +354,7 @@ export default function HomePage() {
               <a href="#discography" className="footer-link" style={{ fontSize: 14, color: "var(--muted)" }}>Discography</a>
               <a href="#licensing" className="footer-link" style={{ fontSize: 14, color: "var(--muted)" }}>Licensing</a>
               <a href="#contact" className="footer-link" style={{ fontSize: 14, color: "var(--muted)" }}>Contact</a>
+              <Link href="/releases" className="footer-link" style={{ fontSize: 14, color: "var(--muted)" }}>Shop</Link>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <span style={{ fontFamily: fontMono, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 6 }}>Follow</span>

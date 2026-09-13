@@ -7,6 +7,8 @@ import { getProductByHandle } from "@/lib/shopify/catalog";
 import { isR2PublicConfigured, publicAssetUrl } from "@/lib/cloudflare/r2";
 import { ReleaseLayout, type FormatOption } from "@/components/store/release-layout";
 import { formatKeyFor, formatLabelFor } from "@/components/store/format-utils";
+import { PREVIEW_LIMIT_SECONDS } from "@/components/store/track-player";
+import { getCustomerSession } from "@/lib/shopify/customer-account/session";
 
 export default async function ReleasePage({
   params,
@@ -18,6 +20,8 @@ export default async function ReleasePage({
   if (!release) notFound();
 
   const artist = getArtistByHandle(release.artistHandle);
+  const session = await getCustomerSession();
+  const previewLimitSeconds = session ? undefined : PREVIEW_LIMIT_SECONDS;
   const products = (
     await Promise.all(release.productHandles.map((h) => getProductByHandle(h)))
   ).filter((p) => p !== null);
@@ -47,6 +51,7 @@ export default async function ReleasePage({
         </div>
       }
       releaseHandle={release.handle}
+      previewLimitSeconds={previewLimitSeconds}
       tracks={release.tracks.map((t) => ({
         title: t.title,
         durationSeconds: t.durationSeconds,

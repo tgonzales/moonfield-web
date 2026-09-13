@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { CreditsBlock } from "./credits-block";
 import { track } from "@/lib/analytics/track";
 
-const PREVIEW_LIMIT_SECONDS = 60;
+/** Default cap for unauthenticated visitors — pass previewLimitSeconds={undefined} for full-length playback. */
+export const PREVIEW_LIMIT_SECONDS = 60;
 
 export interface PlayerTrack {
   title: string;
@@ -38,11 +39,14 @@ export function TrackPlayer({
   releaseHandle,
   description,
   credits,
+  previewLimitSeconds,
 }: {
   tracks: PlayerTrack[];
   releaseHandle: string;
   description?: string;
   credits?: string;
+  /** Undefined = full-length playback (pass PREVIEW_LIMIT_SECONDS explicitly to cap it — see callers, which decide this from auth state). */
+  previewLimitSeconds?: number;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
@@ -96,13 +100,14 @@ export function TrackPlayer({
 
   /**
    * Preview cap: pause (or advance, if playing the whole release in
-   * sequence) once a track hits PREVIEW_LIMIT_SECONDS — client-side only,
+   * sequence) once a track hits previewLimitSeconds — client-side only,
    * so it shapes the UI but doesn't stop someone from fetching the file's
-   * public R2 URL directly.
+   * public R2 URL directly. No cap at all when previewLimitSeconds is
+   * undefined (authenticated customers get full-length playback).
    */
   function handleTimeUpdate() {
     const audio = audioRef.current;
-    if (audio && audio.currentTime >= PREVIEW_LIMIT_SECONDS) {
+    if (audio && previewLimitSeconds !== undefined && audio.currentTime >= previewLimitSeconds) {
       audio.pause();
       handleEnded();
     }

@@ -4,10 +4,12 @@ import { getCart } from "@/lib/cart/actions";
 import { removeCartLine, updateCartLineQuantity } from "@/lib/cart/actions";
 import { formatMoney } from "@/components/store/price";
 import { Button } from "@/components/ui/button";
+import { getCustomerSession } from "@/lib/shopify/customer-account/session";
 
 export default async function CartPage() {
-  const cart = await getCart();
+  const [cart, session] = await Promise.all([getCart(), getCustomerSession()]);
   const lines = cart?.lines.edges.map((e) => e.node) ?? [];
+  const checkoutHref = session ? cart?.checkoutUrl : "/auth/login?returnTo=/cart";
 
   if (lines.length === 0) {
     return (
@@ -79,7 +81,7 @@ export default async function CartPage() {
             <span>Subtotal</span>
             <span>{formatMoney(cart.cost.subtotalAmount.amount, cart.cost.subtotalAmount.currencyCode)}</span>
           </div>
-          <Button render={<a href={cart.checkoutUrl} />} size="lg">
+          <Button render={<a href={checkoutHref ?? cart.checkoutUrl} />} size="lg">
             Checkout
           </Button>
         </div>

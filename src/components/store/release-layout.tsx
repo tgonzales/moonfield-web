@@ -39,12 +39,14 @@ export function ReleaseLayout({
   options,
   tracks,
   releaseHandle,
+  previewLimitSeconds,
 }: {
   cover: ReactNode;
   header: ReactNode;
   options: FormatOption[];
   tracks: PlayerTrack[];
   releaseHandle: string;
+  previewLimitSeconds?: number;
 }) {
   const [selectedKey, setSelectedKey] = useState(options[0]?.key);
   const selected = options.find((o) => o.key === selectedKey) ?? options[0];
@@ -117,6 +119,7 @@ export function ReleaseLayout({
             tracks={tracks}
             description={selected?.product.raw.descriptionHtml}
             credits={selected?.product.credits}
+            previewLimitSeconds={previewLimitSeconds}
           />
         )}
       </div>

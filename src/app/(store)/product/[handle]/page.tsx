@@ -3,7 +3,8 @@ import Image from "next/image";
 import { getProductByHandle } from "@/lib/shopify/catalog";
 import { ProductVariantPicker } from "@/components/store/product-variant-picker";
 import { Badge } from "@/components/ui/badge";
-import { TrackPlayer, type PlayerTrack } from "@/components/store/track-player";
+import { TrackPlayer, type PlayerTrack, PREVIEW_LIMIT_SECONDS } from "@/components/store/track-player";
+import { getCustomerSession } from "@/lib/shopify/customer-account/session";
 import { ExpandableText } from "@/components/store/expandable-text";
 import { CreditsBlock } from "@/components/store/credits-block";
 import { getReleaseByHandle } from "@/content/releases";
@@ -28,6 +29,8 @@ export default async function ProductPage({
     durationSeconds: t.durationSeconds,
     streamUrl: t.streamKey && isR2PublicConfigured ? publicAssetUrl(t.streamKey) : undefined,
   }));
+  const session = await getCustomerSession();
+  const previewLimitSeconds = session ? undefined : PREVIEW_LIMIT_SECONDS;
 
   return (
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
@@ -73,6 +76,7 @@ export default async function ProductPage({
             releaseHandle={release.handle}
             description={raw.descriptionHtml}
             credits={product.credits}
+            previewLimitSeconds={previewLimitSeconds}
           />
         )}
         {product.credits && (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCart } from "@/lib/cart/actions";
 import { CartSheet } from "@/components/cart/cart-sheet";
+import { getCustomerSession } from "@/lib/shopify/customer-account/session";
 
 const NAV_LINKS = [
   { href: "/releases", label: "Music" },
@@ -10,7 +11,11 @@ const NAV_LINKS = [
 ];
 
 export async function StoreHeader() {
-  const cart = await getCart();
+  const [cart, session] = await Promise.all([getCart(), getCustomerSession()]);
+  // Checkout requires being signed in — that's what links the resulting Shopify
+  // order to the customer's account (see src/lib/cart/actions.ts). Cart return
+  // path so they land back here and can finish checking out once logged in.
+  const checkoutHref = session ? cart?.checkoutUrl : "/auth/login?returnTo=/cart";
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
@@ -32,7 +37,13 @@ export async function StoreHeader() {
           >
             Search
           </Link>
-          <CartSheet cart={cart} />
+          <Link
+            href={session ? "/auth/logout" : "/auth/login"}
+            className="hidden rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground md:block"
+          >
+            {session ? "Log out" : "Log in"}
+          </Link>
+          <CartSheet cart={cart} checkoutHref={checkoutHref} />
         </div>
       </div>
     </header>
