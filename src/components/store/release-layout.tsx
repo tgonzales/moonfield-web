@@ -55,6 +55,10 @@ export function ReleaseLayout({
   const [selectedKey, setSelectedKey] = useState(options[0]?.key);
   const selected = options.find((o) => o.key === selectedKey) ?? options[0];
   const variant = selected?.product.raw.variants.edges[0]?.node;
+  // CD/Vinyl checkout happens on elasticStage's own page, not ours — our price is
+  // converted from our USD base by Shopify's own market pricing, elasticStage bills
+  // separately (their own currency/region logic), so ours is only a reference here.
+  const isElasticStageCheckout = selected?.product.productType === "PHYSICAL" && Boolean(elasticStageUrl);
 
   return (
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
@@ -84,6 +88,7 @@ export function ReleaseLayout({
               <div className="flex items-center gap-2">
                 <p className="text-lg">
                   {variant && <Price amount={variant.price.amount} currencyCode={variant.price.currencyCode} />}
+                  {isElasticStageCheckout && "*"}
                 </p>
                 {selected.product.status !== "AVAILABLE" && (
                   <Badge variant="secondary">{selected.product.status}</Badge>
@@ -91,7 +96,13 @@ export function ReleaseLayout({
               </div>
             </div>
 
-            {variant && selected.product.productType === "PHYSICAL" && elasticStageUrl ? (
+            {isElasticStageCheckout && (
+              <p className="text-xs text-muted-foreground">
+                * Approximate price. elasticStage shows the exact price for your region at checkout.
+              </p>
+            )}
+
+            {variant && isElasticStageCheckout ? (
               <Button
                 render={<a href={elasticStageUrl} target="_blank" rel="noopener noreferrer" />}
                 className="w-fit"
