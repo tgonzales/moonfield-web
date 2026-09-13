@@ -47,6 +47,7 @@ export const RELEASES: Release[] = [
       { title: "Sandbox Love", durationSeconds: 370, streamKey: "releases/hello-how-can-i-help-you/stream/11-sandbox-love.mp3" },
     ],
     productHandles: ["hello-how-can-i-help-you-digital", "hello-how-can-i-help-you-cd", "hello-how-can-i-help-you-vinyl"],
+    elasticStageUrl: "https://elasticstage.com/nix/releases/hello-how-can-i-help-you-album",
   },
   {
     handle: "out-of-my-time",

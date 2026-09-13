@@ -52,6 +52,7 @@ export default async function ReleasePage({
       }
       releaseHandle={release.handle}
       previewLimitSeconds={previewLimitSeconds}
+      elasticStageUrl={release.elasticStageUrl}
       tracks={release.tracks.map((t) => ({
         title: t.title,
         durationSeconds: t.durationSeconds,

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ExpandableText } from "./expandable-text";
 import { CreditsBlock } from "./credits-block";
@@ -40,6 +41,7 @@ export function ReleaseLayout({
   tracks,
   releaseHandle,
   previewLimitSeconds,
+  elasticStageUrl,
 }: {
   cover: ReactNode;
   header: ReactNode;
@@ -47,6 +49,8 @@ export function ReleaseLayout({
   tracks: PlayerTrack[];
   releaseHandle: string;
   previewLimitSeconds?: number;
+  /** elasticStage's hosted checkout for this release's CD/Vinyl — see src/lib/domain/release.ts. */
+  elasticStageUrl?: string;
 }) {
   const [selectedKey, setSelectedKey] = useState(options[0]?.key);
   const selected = options.find((o) => o.key === selectedKey) ?? options[0];
@@ -87,12 +91,21 @@ export function ReleaseLayout({
               </div>
             </div>
 
-            {variant && (
-              <AddToCartButton
-                variantId={variant.id}
-                disabled={!variant.availableForSale}
-                productHandle={selected.product.handle}
-              />
+            {variant && selected.product.productType === "PHYSICAL" && elasticStageUrl ? (
+              <Button
+                render={<a href={elasticStageUrl} target="_blank" rel="noopener noreferrer" />}
+                className="w-fit"
+              >
+                Buy on elasticStage →
+              </Button>
+            ) : (
+              variant && (
+                <AddToCartButton
+                  variantId={variant.id}
+                  disabled={!variant.availableForSale}
+                  productHandle={selected.product.handle}
+                />
+              )
             )}
           </div>
         ) : (
