@@ -8,10 +8,16 @@ interface TokenResponse {
 }
 
 async function postToken(body: URLSearchParams): Promise<TokenResponse> {
-  const { tokenUrl } = getCustomerAccountConfig();
+  const { tokenUrl, clientId, clientSecret } = getCustomerAccountConfig();
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  // Confidential client: authenticate via HTTP Basic, never as a body/query param.
+  if (clientSecret) {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+  }
+
   const res = await fetch(tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body,
     cache: "no-store",
   });

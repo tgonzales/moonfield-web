@@ -16,6 +16,8 @@
  */
 export interface CustomerAccountConfig {
   clientId: string;
+  /** Confidential clients only — sent as HTTP Basic auth on token requests, never in a body/query param. */
+  clientSecret: string | undefined;
   authorizeUrl: string;
   tokenUrl: string;
   logoutUrl: string | undefined;
@@ -23,6 +25,7 @@ export interface CustomerAccountConfig {
 
 export function getCustomerAccountConfig(): CustomerAccountConfig {
   const clientId = process.env.SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET;
   const authorizeUrl = process.env.SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZE_URL;
   const tokenUrl = process.env.SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_URL;
   const logoutUrl = process.env.SHOPIFY_CUSTOMER_ACCOUNT_LOGOUT_URL;
@@ -35,7 +38,7 @@ export function getCustomerAccountConfig(): CustomerAccountConfig {
     );
   }
 
-  return { clientId, authorizeUrl, tokenUrl, logoutUrl };
+  return { clientId, clientSecret, authorizeUrl, tokenUrl, logoutUrl };
 }
 
 let cachedGraphqlApiUrl: { url: string; expiresAt: number } | null = null;
